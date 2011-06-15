@@ -1,0 +1,28 @@
+Distribuição Drupal destinada a Escolas dos Segundo e Terceiro Ciclos, bem como a Centros de Formação.
+Nesta versão inicial todo o conteúdo está em português, mas irá dirigir-se para a língua inglesa.
+
+Utilizador administrativo
+>user: admin
+>pass: admin
+
+Base de dados
+O dump da base de dados está na pasta "assets".
+>nome da base de dados: escolas
+>user da base de dados: escolas01
+>pass do user da base de dados: escolas
+
+
+
+*********************
+Drupal profile aimed at High Schools and Training Centers.
+In this initial version all the site content is in Portuguese, but it will later evolve into english.
+
+Admin user
+>user: admin
+>pass: admin
+
+Database
+The database dump is on the "assets" folder.
+>database name: escolas
+>database user: escolas01
+>database user pass: escolas

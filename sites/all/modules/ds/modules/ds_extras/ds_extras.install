@@ -1,0 +1,132 @@
+<?php
+
+/**
+ * @file
+ * Install file.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function ds_extras_schema() {
+
+  $schema['ds_vd'] = array(
+    'description' => 'The base table for views displays.',
+
+    // CTools export definitions.
+    'export' => array(
+      'key' => 'vd',
+      'identifier' => 'ds_vd',
+      'default hook' => 'ds_vd_info',
+      'can disable' => FALSE,
+      'api' => array(
+        'owner' => 'ds_extras',
+        'api' => 'ds_extras',
+        'minimum_version' => 1,
+        'current_version' => 1,
+      ),
+    ),
+
+    'fields' => array(
+      'vd' => array(
+        'description' => 'The primary identifier for the views display.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'label' => array(
+        'description' => 'The label for the views display.',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'primary key' => array('vd'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function ds_extras_install() {
+
+  $schema['node_revision'] = array();
+  ds_extras_schema_alter($schema);
+  foreach ($schema['node_revision']['fields'] as $name => $spec) {
+    db_add_field('node_revision', $name, $spec);
+  }
+
+  db_update('system')
+    ->fields(array('weight' => 1))
+    ->condition('name', 'ds_extras')
+    ->execute();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function ds_extras_uninstall() {
+  variable_del('ds_extras_region_to_block');
+  variable_del('ds_extras_region_blocks');
+  variable_del('ds_extras_switch_view_mode');
+  variable_del('ds_extras_vd');
+  variable_del('ds_extras_fivestar');
+  variable_del('ds_extras_hide_page_title');
+  variable_del('ds_extras_field_template');
+  variable_del('ds_styles_fields');
+  variable_del('ft-default');
+  db_drop_field('node_revision', 'ds_switch');
+
+  // Remove fivestar variables.
+  $types = node_type_get_names();
+  foreach ($types as $node_type => $name) {
+    $variable = 'fivestar_' . $node_type;
+    $enabled = variable_get('ds_' . $variable, 0);
+    variable_set($variable, $enabled);
+  }
+  db_query("DELETE FROM {variable} WHERE name LIKE 'ds_fivestar_%'");
+  cache_clear_all('variables', 'cache');
+}
+
+/**
+ * Implements hook_schema_alter().
+ */
+function ds_extras_schema_alter(&$schema) {
+
+  // Add a field ds_extras to the node_revision table in order
+  // to store the name of view mode to switch to.
+  if (isset($schema['node_revision'])) {
+    $schema['node_revision']['fields']['ds_switch'] = array(
+      'type' => 'varchar',
+      'length' => 255,
+      'not null' => TRUE,
+      'default' => '',
+    );
+  }
+}
+
+/**
+ * Implements hook_update_N().
+ */
+function ds_extras_update_7001() {
+  db_change_field('ds_vd', 'vd', 'vd', array('description' => 'The primary identifier for the views display.', 'type' => 'varchar', 'length' => 128, 'not null' => TRUE, 'default' => ''));
+}
+
+/**
+ * Implements hook_update_N().
+ */
+function ds_extras_update_7002() {
+  db_update('system')
+    ->fields(array('weight' => 1))
+    ->condition('name', 'ds_extras')
+    ->execute();
+}
+
+/**
+ * Implements hook_update_N().
+ */
+function ds_extras_update_7003() {}

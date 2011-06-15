@@ -1,0 +1,20 @@
+-------------------------------------------------------------------------------------
+7.x-1.1 09/05/2011
+-------------------------------------------------------------------------------------
+- #1150536 by swentel: fix apachesolr changes in DS search.
+- #1053912 by swentel and jyve: change field labels, classes and wrappers per mode. 
+- #1142572 by swentel: add ability to hide the page title on full node view.
+- #1132682 by swentel: add hook_ds_layout_info_alter().
+- #1129208 by swentel: support for Fivestar in Extras module.
+- #1129228 by netsensei and swentel: create separate render function.
+- #1131364 by BrockBoland: fix documentation in ds.api.php for use_token.
+- #1124346 by codycraven and swentel: Fix racing conditions on additional settings.
+- #1125250 by swentel: check on default user image.
+- Use another function to preprocess a view.
+- Optimized wording in extras settings screen.
+- Remove Obsolete CVS $Id$ tags and .DS_Store directory.
+
+-------------------------------------------------------------------------------------
+7.x-1.0 09/04/2011
+-------------------------------------------------------------------------------------
+- First official 1.0 release for D7.

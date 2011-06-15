@@ -1,0 +1,319 @@
+<?php
+// $Id: styles.module,v 1.2.2.26 2010/01/25 22:18:34 aaron Exp $
+
+/**
+ *  @file
+ *  Bundles similar display formatters together.
+ */
+
+/**
+ * Styles constant for user styles in the database.
+ */
+define('STYLES_STORAGE_NORMAL', 1);
+
+/**
+ * Styles constant for user styles that override module-defined styles.
+ */
+define('STYLES_STORAGE_OVERRIDE', 2);
+
+/**
+ * Styles constant for module-defined styles in code.
+ */
+define('STYLES_STORAGE_DEFAULT', 4);
+
+/**
+ * Styles constant to represent an editable preset.
+ */
+define('STYLES_STORAGE_EDITABLE', STYLES_STORAGE_NORMAL | STYLES_STORAGE_OVERRIDE);
+
+/**
+ * Styles constant to represent any module-based preset.
+ */
+define('STYLES_STORAGE_MODULE', STYLES_STORAGE_OVERRIDE | STYLES_STORAGE_DEFAULT);
+
+/**
+ *  Implements hook_field_formatter_info().
+ */
+function styles_field_formatter_info() {
+  $info = array();
+  $presets = styles_presets();
+  foreach ($presets as $field_type => $styles) {
+    foreach ($styles as $style_name => $style) {
+      $info['styles_' . $field_type . '_' . $style_name] = array(
+        'label' => t('@field Style: @style', array('@field' => ucfirst($field_type), '@style' => $style_name)),
+        'field types' => array($field_type),
+        'behaviors' => array(
+          'multiple values' => FIELD_BEHAVIOR_DEFAULT,
+        ),
+        'theme' => array('function' => 'theme_styles_field_formatter')
+      );
+    }
+  }
+  return $info;
+}
+
+/**
+ *  Implements hook_field_formatter_view().
+ */
+function styles_field_formatter_view($obj_type, $object, $field, $instance, $langcode, $items, $display) {
+  $element = array('#formatter' => $display['type']);
+  if (!is_array($object)) {
+    $object = array($object);
+  }
+  foreach ($object as $delta => $item) {
+    $element[$delta] = array('#markup' => theme('styles_field_formatter', array('element' => $element, 'object' => $item)));
+  }
+
+  return $element;
+}
+
+/**
+ *  The formatter theme callback.
+ */
+function theme_styles_field_formatter($variables) {
+  $element = $variables['element'];
+  $formatter = $element['#formatter'];
+  $variables['object'] = (object)$variables['object'];
+  $output = '';
+  if (preg_match('@^styles_(.*?)_(.*?)$@i', $formatter, $matches)) {
+    $variables['field_type'] = $field_type = $matches[1];
+    $variables['style_name'] = $style_name = $matches[2];
+    $output = theme('styles', $variables);
+  }
+  return $output;
+}
+
+/**
+ *  Preprocess for theme_styles().
+ */
+function styles_preprocess_styles(&$variables) {
+  $field_type = $variables['field_type'];
+  $style_name = $variables['style_name'];
+  $variables['output'] = '';
+  $presets = styles_presets();
+  $containers = styles_containers();
+  $container = $containers[$field_type]['containers'];
+  foreach ($container as $container_name => $styles) {
+    $variables['container'] = $styles;
+    $variables['container_name'] = $variables['container']['name'];
+    $callback = $styles['filter callback'];
+    if (function_exists($callback)) {
+      if (call_user_func_array($callback, array($variables))) {
+        if (!empty($presets[$field_type][$style_name][$container_name])) {
+          $variables['preset'] = array_pop($presets[$field_type][$style_name][$container_name]);
+          $variables['preset_name'] = $variables['preset']['name'];
+          $variables['output'] = theme($styles['themes']['styles'], $variables);
+          $variables['classes_array'][] = 'styles-field-' . $field_type;
+          $variables['classes_array'][] = 'styles-style-' . $style_name;
+          $variables['classes_array'][] = 'styles-container-' . $variables['container_name'];
+          $variables['classes_array'][] = 'styles-preset-' . $variables['preset_name'];
+          $variables['classes'] = implode(' ', $variables['classes_array']);
+          break;
+        }
+      }
+    }
+  }
+}
+
+/**
+ *  Implements hook_theme().
+ */
+function styles_theme($existing, $type, $theme, $path) {
+  return array(
+    'styles' => array(
+      'variables' => array('field_type' => NULL, 'style_name' => NULL, 'object' => NULL),
+      'template' => 'styles',
+    ),
+    'styles_field_formatter' => array(
+      'variables' => array('render element' => 'element', 'element' => NULL, 'object' => NULL),
+    ),
+  );
+}
+
+/**
+ *  Load a specific array of styles containers.
+ *  @param $field_type
+ *    The field type, such as 'file'.
+ */
+function styles_containers_load($field_type) {
+  $containers = styles_containers();
+  if (isset($containers[$field_type])) {
+    return $containers[$field_type];
+  }
+}
+
+/**
+ *  Load a specific container from a field type.
+ *  @param $field_type
+ *    The field type, such as 'file'.
+ *  @param $container_name
+ *    The container name, such as 'video'.
+ */
+function styles_fieldtype_container_load($field_type, $container_name) {
+  $containers = styles_containers_load($field_type);
+  if (isset($containers['containers'][$container_name])) {
+    return $containers['containers'][$container_name];
+  }
+}
+
+/**
+ *  Get an array of all defined style containers.
+ */
+function styles_containers() {
+  $containers = &drupal_static(__FUNCTION__);
+
+  // Grab from cache or build the array.
+  if (!isset($containers)) {
+    if ($cache = cache_get('styles_containers', 'cache')) {
+      $containers = $cache->data;
+    }
+    else {
+      module_load_all_includes('inc', 'styles');
+      foreach (module_implements('styles_containers') as $module) {
+        $module_containers = module_invoke($module, 'styles_containers');
+        foreach ($module_containers as $field_type => $field_container) {
+          $containers[$field_type]['field_name'] = $field_type;
+          if (isset($field_container['admin'])) {
+            $containers[$field_type]['admin'] = $field_container['admin'];
+          }
+          if (isset($field_container['help'])) {
+            $containers[$field_type]['help'] = $field_container['help'];
+          }
+          foreach ($field_container['containers'] as $container_name => $container) {
+            $container['name'] = $container_name;
+            $container['module'] = $module;
+            $container['available styles'] = styles_containers_available_styles($field_type, $container_name);
+            $containers[$field_type]['containers'][$container_name] = $container;
+          }
+        }
+      }
+      drupal_alter('styles_containers', $containers);
+
+      foreach ($containers as $field_type => $container) {
+        // Sort the containers by weight.
+        uasort($containers[$field_type]['containers'], 'styles_uasort');
+      }
+
+      cache_set('styles_containers', $containers);
+    }
+  }
+  return $containers;
+}
+
+/**
+ *  Sort the containers array by weight and label.
+ *  Use like usort($containers, 'styles_usort');
+ */
+function styles_uasort($a, $b) {
+  $retval = $a['weight'] - $b['weight'];
+  if (!$retval) {
+    return strnatcasecmp($a['label'], $b['label']);
+  }
+  return $retval;
+}
+
+/**
+ *  Get an array of all available styles.
+ */
+function styles_styles() {
+  $styles = &drupal_static(__FUNCTION__);
+
+  // Grab from cache or build the array.
+  if (!isset($styles)) {
+    if ($cache = cache_get('styles_styles', 'cache')) {
+      $styles = $cache->data;
+    }
+    else {
+      $styles = array();
+      module_load_all_includes('inc', 'styles');
+      foreach (module_implements('styles_styles') as $module) {
+        $module_styles = module_invoke($module, 'styles_styles');
+        foreach ($module_styles as $field_name => $containers) {
+          if (!isset($styles[$field_name])) {
+            $styles[$field_name] = array('containers' => array());
+          }
+          foreach ($containers['containers'] as $container_name => $container) {
+            if (!isset($styles[$field_name]['containers'][$container_name])) {
+              $styles[$field_name]['containers'][$container_name] = array();
+            }
+            foreach ($container['styles'] as $style_name => $style) {
+              $style['name'] = $style_name;
+              $style['module'] = $module;
+              $style['storage'] = STYLES_STORAGE_DEFAULT;
+              $styles[$field_name]['containers'][$container_name]['styles'][$style_name] = $style;
+            }
+          }
+        }
+      }
+      drupal_alter('styles_styles', $styles);
+      cache_set('styles_styles', $styles);
+    }
+  }
+  return $styles;
+}
+
+/**
+ *  Grab all styles available to a specific field type/container.
+ *  @param $field_type
+ *    The field type name.
+ *  @param $container_name
+ *    The name of the container to fetch for that field type.
+ *  @param $style_name
+ *    (optional) The name of the specific style for the field/container to
+ *    return. If not specified, then return all styles for the combination.
+ */
+function styles_containers_available_styles($field_type, $container_name, $style_name = NULL) {
+  $styles = styles_styles();
+
+  if (isset($style_name)) {
+    return isset($styles[$field_type]['containers'][$container_name]['styles'][$style_name]) ? $styles[$field_type]['containers'][$container_name]['styles'][$style_name] : FALSE;
+  }
+
+  return isset($styles[$field_type]) ? (isset($styles[$field_type]['containers'][$container_name]['styles']) ? $styles[$field_type]['containers'][$container_name]['styles'] : FALSE) : FALSE;
+}
+
+/**
+ *  Return an array of all style presets.
+ */
+function styles_presets() {
+  $presets = &drupal_static(__FUNCTION__);
+
+  // First check the cache.
+  if (!isset($presets)) {
+    // Build the default presets.
+    $presets = array();
+    module_load_all_includes('inc', 'styles');
+    foreach (module_implements('styles_presets') as $module) {
+      $styles_containers = module_invoke($module, 'styles_presets');
+      foreach ($styles_containers as $field_type => $preset) {
+        foreach ($preset as $preset_name => $container) {
+          foreach ($container as $container_name => $styles) {
+            foreach ($styles as $style_name) {
+              if ($style = styles_containers_available_styles($field_type, $container_name, $style_name)) {
+                if (!isset($presets[$field_type])) {
+                  $presets[$field_type] = array();
+                }
+                if (!isset($presets[$field_type][$preset_name])) {
+                  $presets[$field_type][$preset_name] = array();
+                }
+                if (!isset($presets[$field_type][$preset_name][$container_name])) {
+                  $presets[$field_type][$preset_name][$container_name] = array();
+                }
+                $presets[$field_type][$preset_name][$container_name][$style_name] = $style;
+              }
+            }
+          }
+        }
+      }
+    }
+    // @TODO
+    // Add user-defined presets and overrides.
+
+    // Save the cache.
+  }
+
+  return $presets;
+}
+
+function styles_preset_save($field_type, $preset_name, $preset) {
+}

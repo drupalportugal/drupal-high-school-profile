@@ -1,0 +1,14 @@
+; $Id: styles.info,v 1.1.2.2 2009/11/14 01:27:48 aaron Exp $
+
+name = Styles
+description = Bundles similar display formatters together.
+package = Styles
+core = 7.x
+files[] = styles.module
+
+; Information added by drupal.org packaging script on 2010-05-15
+version = "7.x-1.0-alpha4"
+core = "7.x"
+project = "styles"
+datestamp = "1273947307"
+

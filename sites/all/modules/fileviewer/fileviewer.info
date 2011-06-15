@@ -1,0 +1,12 @@
+name = File viewer
+description = Open and view file field in the browser.
+core = 7.x
+dependencies[] = file
+
+
+; Information added by drupal.org packaging script on 2011-03-09
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "fileviewer"
+datestamp = "1299672302"
+

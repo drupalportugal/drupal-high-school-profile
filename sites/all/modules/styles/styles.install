@@ -1,0 +1,100 @@
+<?php
+// $Id: styles.install,v 1.1.2.2 2009/11/13 16:00:26 aaron Exp $
+
+/**
+ * @file
+ * Install, update and uninstall functions for the Styles module.
+ */
+
+/**
+ * Implement hook_install().
+ */
+function styles_install() {
+}
+
+/**
+ * Implement hook_uninstall().
+ */
+function styles_uninstall() {
+}
+
+/**
+ * Implement hook_schema().
+ */
+function styles_schema() {
+  $schema = array();
+
+  $schema['cache_styles'] = drupal_get_schema_unprocessed('system', 'cache');
+  $schema['cache_styles']['description'] = 'Cache table used to store information display manipulations that are in-progress.';
+
+  $schema['styles'] = array(
+    'description' => 'Stores configuration options for styles.',
+    'fields' => array(
+      'sid' => array(
+        'description' => 'The primary identifier for a style.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'description' => 'The style name.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('sid'),
+    'indexes' => array(
+      'name' => array('name'),
+    ),
+  );
+
+  $schema['style_effects'] = array(
+    'description' => 'Stores configuration options for style effects.',
+    'fields' => array(
+      'seid' => array(
+        'description' => 'The primary identifier for a style effect.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'sid' => array(
+        'description' => 'The {styles}.sid for a style.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'weight' => array(
+        'description' => 'The weight of the effect in the style.',
+        'type' => 'int',
+        'unsigned' => FALSE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'name' => array(
+        'description' => 'The unique name of the effect to be executed.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'data' => array(
+        'description' => 'The configuration data for the effect.',
+        'type' => 'text',
+        'not null' => TRUE,
+        'size' => 'big',
+        'serialize' => TRUE,
+      ),
+    ),
+    'primary key' => array('seid'),
+    'indexes' => array(
+      'sid' => array('sid'),
+      'weight' => array('weight'),
+    ),
+    'foreign keys' => array(
+      'sid' => array('styles' => 'sid'),
+    ),
+  );
+
+  return $schema;
+}

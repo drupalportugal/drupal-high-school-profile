@@ -1,0 +1,28 @@
+.indent {
+    padding-left: 1em;
+}
+
+#booksearch, .info, .share, .read {
+    display: none;
+}
+
+#BRcontainer {
+    top: 40px;
+}
+
+div#BRnav {
+    position: absolute;
+}
+
+#epubreader{
+    width: 100%;
+    height: 600px;
+}
+
+#BookReader {
+}
+
+.ui-widget-content {
+  border: none;
+  background: none;
+}

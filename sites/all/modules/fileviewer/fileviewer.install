@@ -1,0 +1,88 @@
+<?php
+/**
+ * Implements hook_requirements().
+ */
+/*
+function fileviewer_requirements($phase) {
+  $requirements = array();
+  $file_exists = file_exists(dirname(__FILE__) . '/SolrPhpClient/Apache/Solr/Service.php');
+  // Ensure translations don't break at install time
+  $t = get_t();
+  $has_server_settings = FALSE;
+  if ($phase == 'runtime' && $file_exists) {
+    $server_id = variable_get('apachesolr_default_server', 'solr');
+      $server = apachesolr_server_load($server_id);
+      if (!$server || empty($server['host']) || empty($server['port']) || empty($server['path'])) {
+      $requirements['apachesolr'] = array(
+        'title' => $t('Apache Solr'),
+        'value' => $t('Missing server configuration'),
+        'description' => $t('Missing or invalid Solr server record for the default server ID %id.', array('%id' => $server_id)),
+        'severity' => REQUIREMENT_ERROR,
+      );
+    }
+    else {
+      $has_server_settings = TRUE;
+    }
+  }
+  if ($phase == 'runtime' && $has_server_settings) {
+    $ping = FALSE;
+    try {
+      $solr = apachesolr_get_solr($server_id);
+      $ping = @$solr->ping(variable_get('apachesolr_ping_timeout', 4));
+      // If there is no $solr object, there is no server available, so don't continue.
+      if (!$ping) {
+        throw new Exception(t('No Solr instance available when checking requirements.'));
+      }
+    }
+    catch (Exception $e) {
+      watchdog('Apache Solr', nl2br(check_plain($e->getMessage())), NULL, WATCHDOG_ERROR);
+    }
+    $value = $ping ? $t('Your site has contacted the Apache Solr server.') : $t('Your site was unable to contact the Apache Solr server.');
+    $severity = $ping ? REQUIREMENT_OK : REQUIREMENT_ERROR;
+    $variables['items'] = array(
+      $t('Host: %host', array('%host' => $server['host'])),
+      $t('Port: %port', array('%port' => $server['port'])),
+      $t('Path: %path', array('%path' => $server['path'])),
+    );
+    $settings = theme('item_list', $variables);
+    $requirements['apachesolr'] = array(
+      'title' => $t('Apache Solr'),
+      'value' => $value,
+      'description' => $t('Default server settings: !settings', array('!settings' => $settings)),
+      'severity' => $severity,
+    );
+  }
+  // All phases
+  $title = $t('Apache Solr PHP Client Library');
+  if ($file_exists) {
+    $expected_revision = 'Revision: 22';
+    require_once 'SolrPhpClient/Apache/Solr/Service.php';
+    $revision = defined('Apache_Solr_Service::SVN_REVISION') ? trim(Apache_Solr_Service::SVN_REVISION, ' $') : '';
+    if ($revision == $expected_revision) {
+      $severity = REQUIREMENT_OK;
+      $value = $t('Correct version "@expected".', array('@expected' => $expected_revision));
+      $description = NULL;
+    }
+    else {
+      $value = $t('Incorrect version "@version". See the instructions in README.txt.', array('@version' => $revision));
+      $description = $t('The version of the library in the SolrPhpClient directory is "@version" compared to the expected "@expected"', array('@version' => $revision, '@expected' => $expected_revision));
+      $severity = REQUIREMENT_ERROR;
+    }
+    $requirements['SolrPhpClient'] = array(
+      'title' => $title,
+      'value' => $value,
+      'description' => $description,
+      'severity' => $severity,
+    );
+  }
+  else {
+    $requirements['SolrPhpClient'] = array(
+        'title' => $title,
+        'value' => $t('<em>Missing</em>.  See the instructions in README.txt'),
+        'description' => $t('The Solr PHP library must be present in a sub-directory named SolrPhpClient.'),
+        'severity' => REQUIREMENT_ERROR,
+    );
+  }
+  return $requirements;
+}
+*/

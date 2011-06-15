@@ -1,0 +1,271 @@
+<?php
+function fileviewer_menu() {
+  $items = array();
+  $items['file/%'] = array(
+    'title' => 'File virewer',
+    'page callback' => 'fileviewer_page',
+    'page arguments' => array(1),
+    'access arguments' => array('access content'),
+    'file' => 'includes/page.inc',
+    'type' => MENU_CALLBACK,
+  );
+  $items['admin/config/media/fileviewer/flush'] = array(
+    'title' => 'Flush files for file viewer',
+    'description' => 'Settings for file viewer.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('fileviewer_flush_confirm'),
+    'access arguments' => array('administer site configuration'),
+  );
+  $items['admin/config/media/fileviewer'] = array(
+    'title' => 'File viewer',
+    'description' => 'Settings for file viewer.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('fileviewer_settings'),
+    'access arguments' => array('administer site configuration'),
+//    'file' => 'admin.inc',
+//    'type' => MENU_LOCAL_TASK,
+  );
+  return $items;
+}
+
+function fileviewer_settings(){
+  drupal_set_message(t('You need to !flush all the cached files after changing the directory.', array('!flush' => l(t('flush'), 'admin/config/media/fileviewer/flush'))), 'warning');
+  $form['fileviewer_path'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Fileviewer directory'),
+    '#default_value' => variable_get('fileviewer_path', 'fileviewer'),
+    '#description' => t('A file system path where uploaded files will be extracted or parsed after uploaded.'),
+  );
+
+  $form['fileviewer_flush'] = array(
+    '#type' => 'submit',
+    '#value' => t('Flush all files'),
+    '#submit' => array('fileviewer_flush_submit'),
+  );
+  return system_settings_form($form);
+}
+
+function fileviewer_flush_submit($form, &$form_state) {
+  drupal_goto('admin/config/media/fileviewer/flush');
+  return;
+}
+
+function fileviewer_flush_confirm_submit($form, &$form_state) {
+  file_unmanaged_delete_recursive('public://' . variable_get('fileviewer_path', 'fileviewer'));
+  foreach (db_select('file_managed', 'fid')->fields('fid', array('fid'))->execute()->fetchCol() as $fid){
+    $file = file_load($fid);
+    fileviewer_file_update($file);
+  }
+  drupal_set_message(t('Files for fileviewer have been flushed'));
+  drupal_goto('admin/config/media/fileviewer');
+  return;
+}
+
+function fileviewer_flush_confirm($form, &$form_state) {
+  return confirm_form(
+    $form,
+    t('Are you sure you want to flush all the files for fileviewer?'),
+    'admin/config/media/fileviewer',
+    t('This will clear all the collected performance statistics stored in APC. This action cannot be undone.'),
+    t('Confirm flush'),
+    t('Cancel'));
+}
+
+function fileviewer_block_info($op = 'list', $delta = 0, $edit = array()){
+  $blocks = array();
+  $blocks['fileviewer'] = array(
+    'info' => t('File viewer toc'), 
+    'status' => TRUE,
+    'region' => 'sidebar_first',
+    'visibility' => 1,
+    'pages' => 'file/*',
+  );
+  return $blocks;
+}
+
+function fileviewer_block_view($delta = ''){
+  $block = array();
+  switch ($delta) {
+    case 'fileviewer':
+      $block['subject'] = t('Contents');
+      $block['content'] = '<div id="toc-container"><ul id="toc"></ul></div>';
+  }
+  return $block;
+}
+
+function fileviewer_file_update($file) {
+  $destination = fileviewer_path($file->fid);
+  file_prepare_directory($destination, FILE_CREATE_DIRECTORY);
+  $destination = $destination . '/';
+
+  switch ($file->filemime) {
+    case 'application/pdf':
+      return fileviewer_pdftopng(drupal_realpath($file->uri), $destination);
+  }
+
+  $file_extension = strtolower(array_pop(explode('.', $file->filename)));
+  switch ($file_extension) {
+    case 'epub':
+      return fileviewer_extract_zip(drupal_realpath($file->uri), $destination);
+  }
+}
+
+function fileviewer_file_delete($file) {
+  return file_unmanaged_delete_recursive(fileviewer_path($file->fid));
+}
+
+/**
+ * Return all CCK fields that are of type 'file'
+ */
+function fileviewer_get_cck_file_fields() {
+  $file_fields = array();
+  if (module_exists('filefield')) {
+    $fields = content_fields();
+    foreach($fields as $key => $values){
+      if($values['type'] == 'filefield') {
+        $file_fields[] = $key;
+      }
+    }
+  }
+  return $file_fields;
+}
+
+function fileviewer_pdftopng($filepath, $destination) {
+  $cmd = 'pdftoppm -png "' . $filepath . '" "' . $destination . 'page"';
+  shell_exec($cmd);
+}
+
+function fileviewer_extract_zip($filepath, $destination) {
+  $extracted = array();
+
+  if ($z = zip_open($filepath)) {
+    while ($entry = zip_read($z)) {
+      if (zip_entry_open($z, $entry, 'r') && ($zip_entry_filesize = zip_entry_filesize($entry))) {
+        $entry_name = zip_entry_name($entry);
+        $data = zip_entry_read($entry, $zip_entry_filesize);
+
+        $filepath = $destination . $entry_name;
+        $parent_dir = dirname($filepath);
+        if (!file_exists($parent_dir)) {
+          file_prepare_directory($parent_dir, FILE_CREATE_DIRECTORY);
+        }
+
+        if ($filepath = file_unmanaged_save_data($data, $filepath, FILE_EXISTS_REPLACE)) {
+          $file = new StdClass();
+          $file->filename = $entry_name;
+          $file->filemime = file_get_mimetype($filepath);
+          $file->filesize = filesize($filepath);
+          $extracted[] = $file;
+        }
+        zip_entry_close($entry);
+      }
+    }
+    zip_close($z);
+  }
+  return $extracted;
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function fileviewer_field_formatter_info() {
+  return array(
+    'fileviewer_default' => array(
+      'label' => t('Fileviwer'),
+      'field types' => array('file'),
+    ),
+    'fileviewer_embed' => array(
+      'label' => t('Embed fileviwer'),
+      'field types' => array('file'),
+    ),
+    'fileviewer_google_docs' => array(
+      'label' => t('Google Docs Viewer'),
+      'field types' => array('file'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function fileviewer_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  switch ($display['type']) {
+    case 'fileviewer_default':
+      foreach ($items as $delta => $item) {
+        $element[$delta] = array(
+          '#theme' => 'fileviewer_formatter_default',
+          '#file' => (object) $item,
+        );
+      }
+      break;
+    case 'fileviewer_embed':
+      foreach ($items as $delta => $item) {
+        $element[$delta] = array(
+          '#theme' => 'fileviewer_formatter_embed',
+          '#file' => (object) $item,
+        );
+      }
+      break;
+    case 'fileviewer_google_docs':
+      foreach ($items as $delta => $item) {
+        $element[$delta] = array('#markup' => empty($item['uri']) ? '' : l ('View '. $item['filename']. ' in Google Docs', 'http://docs.google.com/viewer?url=' . file_create_url($item['uri'])));
+      }
+      break;
+  }
+  return $element;
+}
+
+function fileviewer_theme() {
+  $path = drupal_get_path('module', 'fileviewer') . '/theme';
+  $theme = array(
+    'fileviewer_formatter_default' => array(
+      'variables' => array('file' => NULL, 'icon_directory' => NULL),
+    ),
+    'fileviewer_formatter_embed' => array(
+      'variables' => array('file' => NULL, 'icon_directory' => NULL),
+    ),
+  );
+  $theme['bookreader_viewer'] = array(
+    'template' => 'bookreader-viewer',
+    'variables' => array('file' => NULL),
+    'path' => $path,
+  );
+  $theme['epubjs_viewer'] = array(
+    'template' => 'epubjs-viewer',
+    'variables' => array('file' => NULL),
+    'path' => $path,
+  );
+  $theme['googledocs_viewer'] = array(
+    'template' => 'googledocs-viewer',
+    'variables' => array('file' => NULL),
+    'path' => $path,
+  );
+  return $theme;
+}
+
+function theme_fileviewer_formatter_default($variables) {
+  $output = '<span class="file">' . theme('file_icon', $variables) . $variables['file']->filename . '</span>'; 
+  $output .= '<div class="fileviewer">';
+  $output .= format_size($variables['file']->filesize);
+  $output .= '　';
+  $output .= '<span>';
+  $output .= l(t('View'), 'file/' . $variables['file']->fid); 
+  $output .= '　';
+  $output .= l(t('Download'), file_create_url($variables['file']->uri));
+  $output .= '</span>';
+  $output .= '</div>';
+  return $output;
+}
+
+function theme_fileviewer_formatter_embed($variables) {
+  global $base_url;
+  $content = '<iframe src="';
+  $content .= $base_url . '/file/' . $variables['file']->fid . '?ui=embed';
+  $content .= '" width="600px" height="850px" frameborder="no" scrolling="no"></iframe>';
+  return $content; //fileviewer_display($variables['file']->fid);;
+}
+
+function fileviewer_path($fid){
+  return drupal_realpath('public://') . '/' . variable_get('fileviewer_path', 'fileviewer') . '/' . $fid;
+}

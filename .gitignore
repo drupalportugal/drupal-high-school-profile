@@ -1,0 +1,5 @@
+sites/default/files/imagecache
+sites/default/files/js/js_*.js
+tmp
+temp
+error_log

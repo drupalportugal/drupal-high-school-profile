@@ -1,0 +1,718 @@
+<?php
+// $Id: file_styles.module,v 1.1.2.8 2010/01/25 22:26:51 aaron Exp $
+
+/**
+ *  @file
+ *  File widget formatter definitions.
+ */
+
+/**
+ *  Implements hook_styles_containers().
+ */
+function file_styles_styles_containers() {
+  $containers = array(
+    'file' => array(
+      'field_name' => 'file',
+      'admin' => array(
+        'path' => 'admin/config/media/file-styles',
+        'access arguments' => array('administer file styles'),
+      ),
+      'help' => t('Each of the following containers defines a set of styles that will be applied when a file is of the specified type. For instance, if a file field allows images and videos, a specific style might be defined for \'Thumbnail\', that will display a cropped image when a JPEG is given, or a thumbnail linking to a shadowboxed video when an MPEG is stored.'),
+      'containers' => array(
+        'image' => array(
+          'label' => t('Image'),
+          'weight' => 0,
+          'data' => array(
+            'streams' => array(
+              'public',
+              'private',
+            ),
+            'mimetypes' => array(
+              'image/png',
+              'image/gif',
+              'image/jpeg',
+            ),
+          ),
+          'filter callback' => 'file_styles_styles_formatter_filter',
+          'themes' => array(
+            'field_formatter_styles' => 'file_styles_field_formatter_styles',
+            'styles' => 'file_styles_image',
+            'preview' => 'file_styles_image_style_preview',
+          ),
+          'description' => t('Image Styles will transform images to your choosing, such as by scaling and cropping. You can !manage.', array('!manage' => l(t('manage your image styles here'), 'admin/config/media/image-styles'))),
+        ),
+      ),
+    ),
+  );
+
+  // The Image container is thus far the same.
+  $containers['image'] = $containers['file'];
+  unset($containers['image']['admin']);
+
+  // Now add Video & Audio support, plus a default fallback.
+  $containers['file']['containers']['video'] = array(
+    'label' => t('Video'),
+    'weight' => 0,
+    'data' => array(
+      'streams' => array(
+        'public',
+        'private',
+      ),
+      'mimetypes' => array(
+        'video/mp4',
+        'video/ogg',
+      ),
+    ),
+    'filter callback' => 'file_styles_styles_formatter_filter',
+    'themes' => array(
+      'field_formatter_styles' => 'file_styles_field_formatter_styles',
+      'styles' => 'file_styles_video',
+      'preview' => 'file_styles_video_style_preview',
+    ),
+    'description' => t('Video Styles will transform videos to your choosing, such as by scaling and adding autoplay. You can !manage.', array('!manage' => l(t('manage your video styles here'), 'admin/config/media/video-styles'))),
+  );
+
+  $containers['file']['containers']['default'] = array(
+    'label' => t('Default'),
+    'weight' => 10,
+    'data' => array(),
+    'filter callback' => 'file_styles_styles_formatter_filter_default',
+    'themes' => array(
+      'field_formatter_styles' => 'file_styles_field_formatter_styles_default',
+      'styles' => 'file_styles_styles_default',
+      'preview' => 'file_styles_preview_default',
+    ),
+  );
+
+  return $containers;
+}
+
+/**
+ *  The 'Default' file style is a fallback when nothing else resolves.
+ */
+function file_styles_styles_formatter_filter_default() {
+  // This is a fallback to handle all generic files.
+  return TRUE;
+}
+
+function file_styles_styles_formatter_filter($variables) {
+  if (isset($variables['object'])) {
+    $object = $variables['object'];
+    $container = $variables['container'];
+    return (in_array(file_uri_scheme($object->uri), $container['data']['streams'])) && (in_array($object->filemime, $container['data']['mimetypes']));
+  }
+}
+
+function file_styles_video_default_effects() {
+  return array(
+    'video_thumbnail' => array(
+      'name' => 'video_thumbnail',
+      'effects' => array(
+        array('label' => t('Thumbnail'), 'name' => 'thumbnail', array('thumbnail' => TRUE)),
+        array('label' => t('Resize'), 'name' => 'resize', 'data' => array('width' => 100, 'height' => 75)),
+      ),
+    ),
+    'video_small' => array(
+      'name' => 'video_small',
+      'effects' => array(
+        array('label' => t('Resize'), 'name' => 'resize', 'data' => array('width' => 220, 'height' => 165)),
+      ),
+    ),
+    'video_large' => array(
+      'name' => 'video_large',
+      'effects' => array(
+        array('label' => t('Resize'), 'name' => 'resize', 'data' => array('width' => 640, 'height' => 480)),
+      ),
+    ),
+  );
+}
+
+/**
+ *  Implements hook_styles_presets().
+ */
+function file_styles_styles_presets() {
+  $presets = array(
+    'file' => array(
+      'square_thumbnail' => array(
+        'default' => array('square_thumbnail'),
+      ),
+      'thumbnail' => array(
+        'default' => array('thumbnail'),
+      ),
+      'large' => array(
+        'default' => array('large'),
+      ),
+      'medium' => array(
+        'default' => array('medium'),
+      ),
+      'original' => array(
+        'default' => array('original'),
+        'image' => array('original'),
+      ),
+    ),
+  );
+  foreach (image_styles() as $style_name => $style) {
+    $presets['file'][$style_name]['image'] = array($style_name);
+  }
+  $presets['image'] = $presets['file'];
+  foreach (image_styles() as $style_name => $style) {
+    $presets['file'][$style_name]['video'] = array('video_large');
+  }
+  $presets['file']['square_thumbnail']['video'] = $presets['file']['thumbnail']['video'] = array('video_thumbnail');
+  $presets['file']['medium']['video'] = array('video_small');
+  $presets['file']['original']['video'] = array('video_large');
+  return $presets;
+}
+
+/**
+ *  Implements hook_styles_styles().
+ */
+function file_styles_styles_styles() {
+  $styles = array();
+  foreach (image_styles() as $style_name => $style) {
+    // Save the module & storage for the Image module namespace.
+    $style['image_module'] = $style['module'];
+    $style['image_storage'] = $style['storage'];
+    $styles[$style_name] = $style;
+  }
+  $styles['original'] = array(
+    'effects' => array(),
+    'name' => 'original',
+    'module' => 'file_styles',
+  );
+  $default_styles = $styles;
+  $all_styles = array(
+    'file' => array(
+      'containers' => array(
+        'image' => array('styles' => $styles),
+      ),
+    ),
+  );
+  $all_styles['image'] = $all_styles['file'];
+  $all_styles['file']['containers']['video'] = array('styles' => file_styles_video_default_effects());
+  $all_styles['file']['containers']['default'] = array('styles' => $default_styles);
+  return $all_styles;
+}
+
+/**
+ * Implement hook_theme().
+ */
+function file_styles_theme() {
+  return array(
+    // Theme functions in file_styles.module.
+    'file_style' => array(
+      'variables' => array(
+        'style_name' => NULL,
+        'path' => NULL,
+        'alt' => '',
+        'title' => '',
+        'attributes' => array(),
+        'getsize' => TRUE,
+      ),
+      'file' => 'file_styles.theme.inc',
+    ),
+
+    // Theme functions in file_styles.admin.inc.
+    'file_styles_list' => array(
+      'variables' => array('styles' => NULL),
+      'file' => 'file_styles.theme.inc',
+    ),
+
+    // Display a image style preset.
+    'file_styles_image_style_preview' => array(
+      'variables' => array('field_type' => NULL, 'container_name' => NULL, 'style_name' => NULL),
+      'file' => 'file_styles.theme.inc',
+    ),
+
+    'file_styles_field_formatter_styles' => array(
+      'variables' => array('element' => NULL, 'style' => NULL),
+      'file' => 'file_styles.theme.inc',
+    ),
+
+    'file_styles_image' => array(
+      'variables' => array('style_name' => NULL, 'uri' => NULL),
+      'file' => 'file_styles.theme.inc',
+    ),
+    'file_styles_field_formatter_styles_default' => array(
+      'variables' => array('element' => NULL, 'style' => NULL),
+      'file' => 'file_styles.theme.inc',
+    ),
+    'file_styles_styles_default' => array(
+      'variables' => array('style_name' => NULL, 'uri' => NULL),
+      'file' => 'file_styles.theme.inc',
+    ),
+    'file_styles_preview_default' => array(
+      'variables' => array('field_type' => NULL, 'container_name' => NULL, 'style_name' => NULL),
+      'file' => 'file_styles.theme.inc',
+    ),
+
+    'file_styles_video' => array(
+      'variables' => array('style_name' => NULL, 'uri' => NULL),
+      'file' => 'file_styles.theme.inc',
+    ),
+  );
+}
+
+/**
+ * Implement hook_permission().
+ */
+function file_styles_permission() {
+  return array(
+    'administer file styles' => array(
+      'title' => t('Administer file styles'),
+      'description' => t('Create and modify styles for generating file displays such as width, height, and autoplay.'),
+    ),
+  );
+}
+
+/**********************************
+ * @TODO: Everything below here is legacy cruft.
+ * Examine for utility for styles ui, then discard.
+ **********************************/
+
+/**
+ * Implement hook_menu().
+ */
+function xfile_styles_menu() {
+  $items = array();
+
+//   $items['file/generate/%file_style'] = array(
+//     'title' => 'Generate file style',
+//     'page callback' => 'file_style_generate',
+//     'page arguments' => array(2),
+//     'access callback' => TRUE,
+//     'type' => MENU_CALLBACK,
+//   );
+  $items['admin/config/file/file-styles'] = array(
+    'title' => 'File styles',
+    'description' => 'Configure file styles that can be used for resizing or adjusting file on display.',
+    'page callback' => 'file_style_list',
+    'access arguments' => array('administer file styles'),
+    'file' => 'file_styles.admin.inc',
+  );
+  $items['admin/config/file/file-styles/list'] = array(
+    'title' => 'List',
+    'description' => 'List the current file styles on the site.',
+    'page callback' => 'file_style_list',
+    'access arguments' => array('administer file styles'),
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => 1,
+    'file' => 'file_styles.admin.inc',
+  );
+  $items['admin/config/file/file-styles/add'] = array(
+    'title' => 'Add style',
+    'description' => 'Add a new file style.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('file_style_add_form'),
+    'access arguments' => array('administer file styles'),
+    'type' => MENU_LOCAL_ACTION,
+    'weight' => 2,
+    'file' => 'file_styles.admin.inc',
+  );
+  $items['admin/config/file/file-styles/edit/%file_style'] = array(
+    'title' => 'Edit style',
+    'description' => 'Configure an file style.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('file_style_form', 5),
+    'access arguments' => array('administer file styles'),
+    'type' => MENU_CALLBACK,
+    'file' => 'file_styles.admin.inc',
+  );
+  $items['admin/config/file/file-styles/delete/%file_style'] = array(
+    'title' => 'Delete style',
+    'description' => 'Delete an file style.',
+    'load arguments' => array(NULL, (string) FILE_STORAGE_NORMAL),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('file_style_delete_form', 5),
+    'access arguments' => array('administer file styles'),
+    'type' => MENU_CALLBACK,
+    'file' => 'file_styles.admin.inc',
+  );
+  $items['admin/config/file/file-styles/revert/%file_style'] = array(
+    'title' => 'Revert style',
+    'description' => 'Revert an file style.',
+    'load arguments' => array(NULL, (string) FILE_STORAGE_OVERRIDE),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('file_style_revert_form', 5),
+    'access arguments' => array('administer file styles'),
+    'type' => MENU_CALLBACK,
+    'file' => 'file_styles.admin.inc',
+  );
+  $items['admin/config/file/file-styles/edit/%file_style/effects/%file_effect'] = array(
+    'title' => 'Edit file effect',
+    'description' => 'Edit an exiting effect within a style.',
+    'load arguments' => array(5, (string) FILE_STORAGE_EDITABLE),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('file_effect_form', 5, 7),
+    'access arguments' => array('administer file styles'),
+    'type' => MENU_CALLBACK,
+    'file' => 'file_styles.admin.inc',
+  );
+  $items['admin/config/file/file-styles/edit/%file_style/effects/%file_effect/delete'] = array(
+    'title' => 'Delete file effect',
+    'description' => 'Delete an exiting effect from a style.',
+    'load arguments' => array(5, (string) FILE_STORAGE_EDITABLE),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('file_effect_delete_form', 5, 7),
+    'access arguments' => array('administer file styles'),
+    'type' => MENU_CALLBACK,
+    'file' => 'file_styles.admin.inc',
+  );
+  $items['admin/config/file/file-styles/edit/%file_style/add/%file_effect_definition'] = array(
+    'title' => 'Add file effect',
+    'description' => 'Add a new effect to a style.',
+    'load arguments' => array(5),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('file_effect_form', 5, 7),
+    'access arguments' => array('administer file styles'),
+    'type' => MENU_CALLBACK,
+    'file' => 'file_styles.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Get an array of all styles and their settings.
+ *
+ * @return
+ *   An array of styles keyed by the image style ID (isid).
+ * @see image_style_load()
+ */
+function file_styles() {
+  $styles = &drupal_static(__FUNCTION__);
+
+  // Grab from cache or build the array.
+  if (!isset($styles)) {
+    if ($cache = cache_get('file_styles', 'cache')) {
+      $styles = $cache->data;
+    }
+    else {
+      $styles = array();
+
+      // Select the module-defined styles.
+      foreach (module_implements('file_default_styles') as $module) {
+        $module_styles = module_invoke($module, 'file_default_styles');
+        foreach ($module_styles as $style_name => $style) {
+          $style['name'] = $style_name;
+          $style['module'] = $module;
+          $style['storage'] = FILE_STORAGE_DEFAULT;
+          foreach ($style['effects'] as $ieid => $effect) {
+            $definition = file_effect_definition_load($effect['name']);
+            $effect = array_merge($definition, $effect);
+            $effect['meid'] = $ieid;
+            $style['effects'][$ieid] = $effect;
+          }
+          $styles[$style_name] = $style;
+        }
+      }
+
+      // Select all the user-defined styles.
+      $user_styles = db_select('file_styles', NULL, array('fetch' => PDO::FETCH_ASSOC))
+        ->fields('file_styles')
+        ->orderBy('name')
+        ->execute()
+        ->fetchAllAssoc('name', PDO::FETCH_ASSOC);
+
+      // Allow the user styles to override the module styles.
+      foreach ($user_styles as $style_name => $style) {
+        $style['module'] = NULL;
+        $style['storage'] = IMAGE_STORAGE_NORMAL;
+        $style['effects'] = image_style_effects($style);
+        if (isset($styles[$style_name]['module'])) {
+          $style['module'] = $styles[$style_name]['module'];
+          $style['storage'] = IMAGE_STORAGE_OVERRIDE;
+        }
+        $styles[$style_name] = $style;
+      }
+
+      drupal_alter('file_styles', $styles);
+      cache_set('file_styles', $styles);
+    }
+  }
+
+  return $styles;
+}
+
+/**
+ * File constant for user styles in the database.
+ */
+define('FILE_STORAGE_NORMAL', 1);
+
+/**
+ * File constant for user styles that override module-defined styles.
+ */
+define('FILE_STORAGE_OVERRIDE', 2);
+
+/**
+ * File constant for module-defined styles in code.
+ */
+define('FILE_STORAGE_DEFAULT', 4);
+
+/**
+ * File constant to represent an editable preset.
+ */
+define('FILE_STORAGE_EDITABLE', FILE_STORAGE_NORMAL | FILE_STORAGE_OVERRIDE);
+
+/**
+ * File constant to represent any module-based preset.
+ */
+define('FILE_STORAGE_MODULE', FILE_STORAGE_OVERRIDE | FILE_STORAGE_DEFAULT);
+
+/**
+ *  Implement hook_field_formatter_info().
+ */
+// function file_styles_field_formatter_info() {
+//   $styles = array();
+//
+//   // Each File Style becomes a new formatter for File (file) fields.
+//   foreach (file_styles() as $style_name => $style) {
+//     $styles[$style_name] = array(
+//       'label' => $style['label'],
+//       'field types' => array('file_generic', 'file', 'image'),
+//       'behaviors' => array(
+//         'multiple values' => FIELD_BEHAVIOR_DEFAULT,
+//       ),
+//     );
+//   }
+//
+//   return $styles;
+// }
+
+
+
+/**
+ * Implement hook_flush_caches().
+ */
+function file_styles_flush_caches() {
+  return array('cache_file_styles');
+}
+
+/**
+ * Save a file style.
+ *
+ * @param style
+ *   An file style array.
+ * @return
+ *   An file style array. In the case of a new style, 'msid' will be populated.
+ */
+function file_style_save($style) {
+  if (isset($style['msid']) && is_numeric($style['msid'])) {
+    // Load the existing style to make sure we account for renamed styles.
+    $old_style = image_style_load(NULL, $style['msid']);
+    file_style_flush($old_style);
+    drupal_write_record('file_styles', $style, 'msid');
+    if ($old_style['name'] != $style['name']) {
+      $style['old_name'] = $old_style['name'];
+    }
+  }
+  else {
+    drupal_write_record('file_styles', $style);
+    $style['is_new'] = TRUE;
+  }
+
+  // Let other modules update as necessary on save.
+  module_invoke_all('file_style_save', $style);
+
+  // Clear all caches and flush.
+  file_style_flush($style);
+
+  return $style;
+}
+
+/**
+ * Flush cached file for a style.
+ *
+ * @param $style
+ *   An image style array.
+ */
+function file_style_flush($style) {
+  $style_directory = drupal_realpath(variable_get('file_default_scheme', 'public') . '://styles/' . $style['name']);
+  if (is_dir($style_directory)) {
+    file_unmanaged_delete_recursive($style_directory);
+  }
+
+  // Let other modules update as necessary on flush.
+  module_invoke_all('file_style_flush', $style);
+
+  // Clear image style and effect caches.
+  cache_clear_all('file_styles', 'cache');
+//   cache_clear_all('file_effects', 'cache');
+  drupal_static_reset('file_styles');
+//   drupal_static_reset('file_effects');
+
+  // Clear field caches so that formatters may be added for this style.
+  field_info_cache_clear();
+  drupal_theme_rebuild();
+
+  // Clear page caches when flushing.
+  if (module_exists('block')) {
+    cache_clear_all('*', 'cache_block', TRUE);
+  }
+  cache_clear_all('*', 'cache_page', TRUE);
+}
+
+/**
+ * Load a style by style name or ID. May be used as a loader for menu items.
+ *
+ * @param $name
+ *   The name of the style.
+ * @param $isid
+ *   Optional. The numeric id of a style if the name is not known.
+ * @param $include
+ *   If set, this loader will restrict to a specific type of file style, may be
+ *   one of the defined Image style storage constants.
+ * @return
+ *   An image style array containing the following keys:
+ *   - "msid": The unique file style ID.
+ *   - "name": The unique file style name.
+ *   - "effects": An array of file effects within this file style.
+ *   If the file style name or ID is not valid, an empty array is returned.
+ * @see file_effect_load()
+ */
+function file_style_load($name = NULL, $isid = NULL, $include = NULL) {
+  $styles = file_styles();
+
+  // If retrieving by name.
+  if (isset($name) && isset($styles[$name])) {
+    $style = $styles[$name];
+  }
+
+  // If retrieving by file style id.
+  if (!isset($name) && isset($isid)) {
+    foreach ($styles as $name => $database_style) {
+      if (isset($database_style['msid']) && $database_style['msid'] == $isid) {
+        break;
+      }
+    }
+  }
+
+  // Restrict to the specific type of flag. This bitwise operation basically
+  // states "if the storage is X, then allow".
+  if (isset($style) && (!isset($include) || ($style['storage'] & (int) $include))) {
+    return $style;
+  }
+
+  // Otherwise the style was not found.
+  return FALSE;
+}
+
+/**
+ * Pull in file effects exposed by modules implementing hook_file_effect_info().
+ *
+ * @return
+ *   An array of file effects to be used when transforming file.
+ * @see hook_file_effect_info()
+ * @see file_effect_definition_load()
+ */
+function file_effect_definitions() {
+  $effects = &drupal_static(__FUNCTION__);
+
+  if (!isset($effects)) {
+    if ($cache = cache_get('file_effects') && !empty($cache->data)) {
+      $effects = $cache->data;
+    }
+    else {
+      $effects = array();
+      module_load_include('inc', 'file_styles', 'file_styles.effects');
+      foreach (module_implements('file_effect_info') as $module) {
+        foreach (module_invoke($module, 'file_effect_info') as $name => $effect) {
+          // Ensure the current toolkit supports the effect.
+          $effect['module'] = $module;
+          $effect['name'] = $name;
+          $effect['data'] = isset($effect['data']) ? $effect['data'] : array();
+          $effects[$name] = $effect;
+        };
+      }
+      uasort($effects, '_file_effect_definitions_sort');
+      cache_set('file_effects', $effects);
+    }
+  }
+
+  return $effects;
+}
+
+/**
+ * Internal function for sorting file effect definitions through uasort().
+ *
+ * @see file_effect_definitions()
+ */
+function _file_effect_definitions_sort($a, $b) {
+  return strcasecmp($a['name'], $b['name']);
+}
+
+
+/**
+ *  @TODO: The following is entirely cruft.
+ */
+
+/**
+ *  Build a list of all registered File styles.
+ *
+ *  Each effect within a style will be attached to a specific mimetype, and
+ *  will be invoked as required when displaying a file field instance.
+ *
+ *  To register a new display formatter for a specific mimetype to be made
+ *  available to the system, you will need to implement
+ *  hook_file_styles($mimetype).
+ *
+ *  To register a default, module-defined style of File effects, you will
+ *  need to implement hook_file_styles_default_styles().
+ *
+ *  See API.txt for more information.
+ *
+ *  @return
+ *    This returns an array of all file styles, keyed by the style names.
+ */
+function hhhfile_styles() {
+  $styles = &drupal_static(__FUNCTION__);
+
+  // Grab from cache or build the array.
+  if (!isset($styles)) {
+    if ($cache = cache_get('file_styles', 'cache')) {
+      $styles = $cache->data;
+    }
+    else {
+      $styles = array();
+
+      // Select the module-defined styles.
+      foreach (module_implements('file_styles_default_styles') as $module) {
+        $module_styles = module_invoke($module, 'file_styles_default_styles');
+        foreach ($module_styles as $style_name => $style) {
+          $style['name'] = $style_name;
+          $style['module'] = $module;
+          $style['storage'] = FILE_STORAGE_DEFAULT;
+          $styles[$style_name] = $style;
+        }
+      }
+
+      // Select all the user-defined styles.
+      $user_styles = db_select('file_styles', NULL, array('fetch' => PDO::FETCH_ASSOC))
+        ->fields('file_styles')
+        ->orderBy('name')
+        ->execute()
+        ->fetchAllAssoc('name', PDO::FETCH_ASSOC);
+
+      // Allow the user styles to override the module styles.
+      foreach ($user_styles as $style_name => $style) {
+        $style['module'] = NULL;
+        $style['storage'] = FILE_STORAGE_NORMAL;
+
+        // Formatters will be an array of module-defined formatters keyed by
+        // mimetype.
+//         $style['formatters'] = unserialize($style['formatters']);
+        if (isset($styles[$style_name]['module'])) {
+          $style['module'] = $styles[$style_name]['module'];
+          $style['storage'] = FILE_STORAGE_OVERRIDE;
+        }
+        $styles[$style_name] = $style;
+      }
+
+      // Allow any module implementing hook_file_style_bundles to alter the styles.
+      drupal_alter('file_styles', $styles);
+      cache_set('file_styles', $styles);
+    }
+  }
+
+  return $styles;
+}
